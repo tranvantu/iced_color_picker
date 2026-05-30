@@ -121,38 +121,77 @@ pub fn slider_style(
     style
 }
 
-pub fn palette_swatch<M: 'static>(
+pub fn palette_swatch<M: Clone + 'static>(
     label: &'static str,
     pair: palette::Pair,
+    on_click: M,
 ) -> Element<'static, M> {
     let bg = pair.color;
     let fg = pair.text;
-    container(text(label).size(10.0))
-        .style(move |_theme: &Theme| container::Style {
+    button(
+        container(text(label).size(10.0))
+            .center_x(Length::Fill)
+            .align_y(iced::Alignment::Center)
+            .height(Length::Fill)
+    )
+    .style(move |_theme: &Theme, status| {
+        let mut base_style = button::Style {
             background: Some(iced::Background::Color(bg)),
-            text_color: Some(fg),
+            text_color: fg,
             border: iced::Border { radius: 4.0.into(), ..Default::default() },
             ..Default::default()
-        })
-        .padding(Padding::new(3.0))
-        .center_x(Length::Fill)
-        .height(18.0)
-        .into()
+        };
+        match status {
+            button::Status::Hovered => {
+                base_style.border.width = 1.0;
+                base_style.border.color = iced::Color::from_rgb(0.5, 0.5, 0.5);
+            }
+            button::Status::Pressed => {
+                base_style.border.width = 1.5;
+                base_style.border.color = iced::Color::BLACK;
+            }
+            _ => {}
+        }
+        base_style
+    })
+    .padding(Padding::new(3.0))
+    .width(Length::Fill)
+    .height(18.0)
+    .on_press(on_click)
+    .into()
 }
 
-pub fn palette_panel<M: 'static>(selected: [f32; 4]) -> Element<'static, M> {
+pub fn palette_panel<M: Clone + 'static>(
+    selected: [f32; 4],
+    on_pick: impl FnMut(u8, u8, u8) -> M + Clone + 'static,
+) -> Element<'static, M> {
     let base = iced::Color::from_rgb(selected[0], selected[1], selected[2]);
     let text_seed = if palette::is_dark(base) { iced::Color::WHITE } else { iced::Color::BLACK };
     let bg = palette::Background::new(base, text_seed);
+
+    let to_u8 = |color: iced::Color| {
+        (
+            (color.r * 255.0).round() as u8,
+            (color.g * 255.0).round() as u8,
+            (color.b * 255.0).round() as u8,
+        )
+    };
+
+    let swatch = |label, pair: palette::Pair| {
+        let (r, g, b) = to_u8(pair.color);
+        let msg = on_pick.clone()(r, g, b);
+        palette_swatch(label, pair, msg)
+    };
+
     column(vec![
-        palette_swatch("weakest",  bg.weakest),
-        palette_swatch("weaker",   bg.weaker),
-        palette_swatch("weak",     bg.weak),
-        palette_swatch("neutral",  bg.neutral),
-        palette_swatch("base",     bg.base),
-        palette_swatch("strong",   bg.strong),
-        palette_swatch("stronger", bg.stronger),
-        palette_swatch("strongest",bg.strongest),
+        swatch("weakest",  bg.weakest),
+        swatch("weaker",   bg.weaker),
+        swatch("weak",     bg.weak),
+        swatch("neutral",  bg.neutral),
+        swatch("base",     bg.base),
+        swatch("strong",   bg.strong),
+        swatch("stronger", bg.stronger),
+        swatch("strongest",bg.strongest),
     ])
     .spacing(3.0)
     .width(80.0)
@@ -386,26 +425,14 @@ where
 
 pub fn submit_row<M: Clone + 'static>(
     show_palette: bool,
-    on_submit: M,
-    on_cancel: M,
+    _on_submit: M,
+    _on_cancel: M,
     on_copy: M,
     on_show_palette: impl Fn(bool) -> M + 'static,
 ) -> iced::widget::Row<'static, M> {
     let size = Pixels(12.0);
 
-    let submit_btn: Element<M> = button(text("Submit").size(size))
-        .on_press(on_submit)
-        .padding(5.0)
-        .style(|theme, status| btn_style(theme, status))
-        .into();
-
-    let cancel_btn: Element<M> = button(text("Cancel").size(size))
-        .on_press(on_cancel)
-        .padding(5.0)
-        .style(|theme, status| btn_style(theme, status))
-        .into();
-
-    let clipbrd_btn: Element<M> = button(text("ClipBoard").size(size))
+    let clipbrd_btn: Element<M> = button(text("Copy Hex").size(size))
         .on_press(on_copy)
         .padding(5.0)
         .style(|theme, status| btn_style(theme, status))
@@ -418,7 +445,7 @@ pub fn submit_row<M: Clone + 'static>(
         .text_size(14.0)
         .into();
 
-    row([submit_btn, cancel_btn, clipbrd_btn, palette_chk])
+    row([clipbrd_btn, palette_chk])
         .spacing(15.0)
         .align_y(iced::Alignment::Center)
 }

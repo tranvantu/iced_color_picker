@@ -171,6 +171,7 @@ impl<Message, Theme, Renderer> Widget<Message, Theme, Renderer>
 where
     Theme: container::Catalog,
     Renderer: text::Renderer,
+    Message: Clone,
 {
     fn children(&self) -> Vec<widget::Tree> {
         vec![
@@ -209,6 +210,7 @@ where
         layout: Layout<'_>,
         cursor: mouse::Cursor,
         renderer: &Renderer,
+        clipboard: &mut dyn iced::advanced::Clipboard,
         shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
     ) {
@@ -226,6 +228,7 @@ where
             layout,
             cursor,
             renderer,
+            clipboard,
             shell,
             viewport,
         );
@@ -288,6 +291,7 @@ where
         );
 
         let content = if self.opened {
+            let on_close = self.on_open.as_ref().map(|f| f(false));
             Some(overlay::Element::new(Box::new(Overlay {
                 position: layout.position() + translation,
                 content: &mut self.content,
@@ -299,6 +303,7 @@ where
                 gap: self.gap,
                 padding: self.padding,
                 class: &self.class,
+                on_close,
             })))
         } else {
             None
@@ -336,7 +341,7 @@ where
 impl<'a, Message, Theme, Renderer> From<ColorPicker<'a, Message, Theme, Renderer>>
     for Element<'a, Message, Theme, Renderer>
 where
-    Message: 'a,
+    Message: Clone + 'a,
     Theme: container::Catalog + 'a,
     Renderer: text::Renderer + 'a,
 {
@@ -381,6 +386,7 @@ where
     gap: f32,
     padding: f32,
     class: &'b Theme::Class<'a>,
+    on_close: Option<Message>,
 }
 
 impl<Message, Theme, Renderer> IcedOverlay<Message, Theme, Renderer>
@@ -388,6 +394,7 @@ impl<Message, Theme, Renderer> IcedOverlay<Message, Theme, Renderer>
 where
     Theme: container::Catalog,
     Renderer: text::Renderer,
+    Message: Clone,
 {
     fn layout(&mut self, renderer: &Renderer, bounds: Size) -> layout::Node {
         let viewport = Rectangle::with_size(bounds);
@@ -501,14 +508,24 @@ where
         layout: Layout<'_>,
         cursor: mouse::Cursor,
         renderer: &Renderer,
+        clipboard: &mut dyn iced::advanced::Clipboard,
         shell: &mut Shell<'_, Message>,
     ) {
+        if let Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) = event {
+            if !cursor.is_over(layout.bounds()) {
+                if let Some(on_close) = &self.on_close {
+                    shell.publish(on_close.clone());
+                }
+            }
+        }
+
         self.content.as_widget_mut().update(
             self.tree,
             event,
             layout.children().next().unwrap(),
             cursor,
             renderer,
+            clipboard,
             shell,
             &Rectangle::with_size(Size::INFINITE),
         );

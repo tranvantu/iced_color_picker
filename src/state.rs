@@ -40,6 +40,7 @@ pub enum ColorPickerEvent {
 }
 
 /// Self-contained state for the color picker panel.
+#[derive(Debug)]
 pub struct ColorPickerState {
     pub r: u8,
     pub g: u8,
@@ -242,7 +243,10 @@ impl ColorPickerState {
 
         let cp_col = column(vec![grad_hue_col, srow]).spacing(3.0);
         let final_col: Element<M> = if show_palette {
-            let pal = palette_panel(color);
+            let pal = palette_panel(color, {
+                let f = on_msg.clone();
+                move |r, g, b| f(ContentMsg::CanvasPicked(r, g, b))
+            });
             row(vec![pal, cp_col.into()]).spacing(5.0).into()
         } else {
             cp_col.into()
